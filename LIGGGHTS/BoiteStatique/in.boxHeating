@@ -1,0 +1,274 @@
+#Name of the script : in.boxheating
+variable script string in.boxHeating
+#*****************************************************
+# Titre : Particles heating in a box
+# Author : Christine Beaulieu
+# Date : July, 2020
+# ***********************************************************************************
+# **************Description of the simulation****************************************
+#
+#This simulation starts with the restart of particles settled down in a box
+#Particles are monodisperse
+#This is a static simulation with heat transfer
+#This simulation aims to validate the impact of roughness
+#
+#
+#**********************Geometry property*********************************************
+#Box
+#Side : 10x10cm (x,y)
+#Length : 20cm (z)
+#************************************************************************************
+#************************************************************************************
+
+# Initialization 
+#--------------------------------------------------------------------------------------
+
+# Preliminaries
+echo                both        # send information to both terminal and software itself
+units               si          # SI units
+atom_style          granular    # Style of atom
+boundary            p p f       # Boundary condition en x y z
+communicate	    single vel yes # must always be present
+atom_modify         map array   # Pour attribuer les ID aux particules
+newton              off         # Prevents supplementary MPI exchange between processors
+
+processors          2 2 1       # Parallel decomposition       
+
+#Lecture de fichier Restart
+#----------------------------------------------------------------------------------------
+read_restart restart/boxLoadingEnd
+
+# Definition of useful variables and particle properties
+#----------------------------------------------------------------------------------------
+#HARD-CODED properties and simulation variables
+#Particles propertie
+#TYPE 1
+variable            diameter1 equal 0.00202
+variable            rho1 equal 2578
+
+#Other variables
+#variable            RPM equal 0 #angular velocity (in RPM)
+variable            timestepPerso equal 0.1
+variable            dumpEvery equal 800
+variable	    thermoEvery equal 100
+variable	    computeEvery equal 200 
+#variable	    nbRotation equal 100
+variable            timesDumpInRestart equal 1
+variable	    nbSeconds equal 4000
+variable	    Tini equal 294 
+variable	    tempWallLow equal ${Tini}
+variable	    tempWallHigh equal 322.15 #49°C 
+
+
+#Variables for the convectice heat flux
+#Constants
+#variable	    fluidViscosity equal 2.3e-5 #kg/m.s
+#variable	    fluidDensity equal 1.0 #kg/m3
+#variable	    fluidConductivity equal 0.03 #W/m.K
+#variable	    fluidHeatCapacity equal 1000 #J/kg.K
+#variable	    prandtl equal (${fluidViscosity}*${fluidHeatCapacity})/${fluidConductivity}
+#variable	    fluidKinViscosity equal ${fluidViscosity}/${fluidDensity}
+
+#Per-atom
+#variable	    partDiameter atom 2*r
+#variable	    demiSphereSurface atom (1/2)*(4*PI*(r^2))
+#variable	    partVelocity atom sqrt((vx^2)+(vy^2)+(vz^2))
+#variable	    reynolds atom (${fluidDensity}*v_partVelocity*v_partDiameter)/${fluidViscosity} 
+#variable	    NuForcedTurb atom (0.037*(v_reynolds^0.8)*v_prandtl)/(1+(2.443*(v_reynolds^(-0.1))*(v_prandtl^(2/3)-1)))
+#variable	    NuForcedLam atom (0.664*sqrt(v_reynolds)*(v_prandtl^(1/3)))
+#variable 	    NuForced atom (2+sqrt((v_NuForcedLam^2)+(v_NuForcedTurb^2)))
+  
+#---------------------------------------------------------------------------------------
+#Calculated variables
+variable	    radius1 equal ${diameter1}/2
+#variable	    inverseRPM equal 1/${RPM}
+variable	    inverseTimeStep equal 1/${timestepPerso}
+variable	    nbIterTotal equal ${nbSeconds}*${inverseTimeStep} #${nbRotation}*${inverseRPM}*60*${inverseTimeStep}
+
+#Other variables
+variable	    time equal time
+variable            step equal step
+variable	    kineticE equal ke 
+variable            nbPart equal atoms
+#variable            radialPos atom sqrt(x^2+z^2)
+variable            restartEvery equal ${timesDumpInRestart}*${dumpEvery}
+
+#variable	    limitAiterations equal v_limitA/v_timestepPerso
+#variable	    limitBiterations equal v_limitB/v_timestepPerso
+#variable	    limitENDiterations equal v_end/v_timestepPerso
+
+# Neighbhors list
+# ---------------------------------------------------------------------------------------
+
+variable 	    skinPerso equal 1.1*${radius1}
+neighbor            ${skinPerso} bin                  # Skin=1.1r 
+neigh_modify        every 1 check yes delay 0   # Frequency at which we refresh the neighbor list
+
+#Creation of the particles
+#----------------------------------------------------------------------------------------
+
+#Material properties (du materiau)
+fix                 m1 all property/global youngsModulus peratomtype 5e6 5e6 5e6
+fix                 m2 all property/global poissonsRatio peratomtype 0.33 0.33 0.33
+fix		    m7 all property/global roughness peratomtype 0.154e-6 0.154e-6 1e-10
+fix 		    m8 all property/global microhardness peratomtype 1800e6 1800e6 1800e6
+fix		    m9 all property/global m_slope peratomtype 0.22 0.22 0.22
+
+#Material properties (du contact)
+fix                 m3 all property/global coefficientRestitution peratomtypepair 3 0.8 0.8 0.8 &
+										    0.8 0.8 0.8 &
+										    0.8 0.8 0.8
+fix                 m4 all property/global coefficientFriction  peratomtypepair 3 1.2 1.2 1.2 &
+										  1.2 1.2 1.2 &
+										  1.2 1.2 1.2
+fix		    m5 all property/global coefficientRollingFriction peratomtypepair 3 0.02 0.02 0.02 &
+											0.02 0.02 0.02 &
+											0.02 0.02 0.02
+
+fix		    m6 all property/global youngsModulusOriginal peratomtype 69e9 69e9 100e9
+
+#Thermal properties of the materials
+fix		   conductivity all property/global thermalConductivity peratomtype 221. 221. 250. #thermal conductivity in W/m.K of glass, glass and aluminum
+fix	           capacity all property/global thermalCapacity peratomtype 896. 896. 900. #heat capacity in J/kg.K
+fix		   gasConductivity all property/global gasConductivity scalar 0.027 
+fix		   freePath all property/global freePath scalar 68e-9
+fix	  	   gasDynViscosity all property/global gasDynViscosity scalar 20e-6
+fix                gasCp all property/global gasCp scalar 1006.
+fix                gammaG all property/global gammaG scalar 1.
+fix                alphaT1 all property/global alphaT1 scalar 0.7
+fix                alphaT2 all property/global alphaT2 scalar 0.7
+
+
+# Timestep and gravity
+# ----------------------------------------------------------------------------------------------
+timestep            ${timestepPerso} #On le determine. Reste constant tout au long de la simulation
+
+#Gravity (ou toute autre force exterieure)
+fix                 gravi all gravity 9.81 vector 0. 0. -1
+
+#Insertion of the meshes
+#------------------------------------------------------------------------------------------------
+
+#Meshes (Aller chercher fichiers mesh dans Salome) AND Fix a temperature to the meshes
+#fix           cylinderNoHeat all mesh/surface file mesh/meshCylinder.stl type 2 scale 0.001 #temperature ${meshTemp} curvature 1e-5
+#fix	       cylinder all wall/gran model hertz tangential history rolling_friction cdt primitive type 2 ycylinder 0.15 0 0 temperature 293  #shear x 0.04712389
+#fix		   zLow all wall/gran model hertz tangential history rolling_friction cdt primitive type 2 zplane 0 temperature 398.15
+fix                zLow all mesh/surface file mesh/floor.stl type 3 scale 0.001 temperature ${tempWallLow} curvature 1e-5
+fix                zHigh all mesh/surface file mesh/top.stl type 3 scale 0.001 temperature ${tempWallHigh} curvature 1e-5
+#fix                xLow all mesh/surface file mesh/xLow.stl type 2 scale 0.001 temperature 298.15 curvature 1e-5
+#fix                xHigh all mesh/surface file mesh/xHigh.stl type 2 scale 0.001 temperature 298.15 curvature 1e-5
+#fix                yLow all mesh/surface file mesh/yLow.stl type 2 scale 0.001 temperature 298.15 curvature 1e-5
+#fix                yHigh all mesh/surface file mesh/yHigh.stl type 2 scale 0.001 temperature 298.15 curvature 1e-5
+#fix                zLow all mesh/surface file mesh/zLow.stl type 2 scale 0.001 temperature 398.15 curvature 1e-5
+#fix                zHigh all mesh/surface file mesh/zHigh.stl type 2 scale 0.001 temperature 298.15 curvature 1e-5
+
+#Rotation of the meshes
+#------------------------------------------------------------------------------------------------
+#variable            angVel equal (${RPM}*2*PI)/60 #angular velocity in rad/time units
+#variable            RPS equal (${RPM}/60) #angular velocity in tr/sec
+#variable            period equal (1/${RPS}) #period of a rotation in seconds
+#fix                 rotation  all move/mesh mesh cylinder rotate origin 0. 0. 0. axis  0. 1. 0. period ${period}
+
+#Heat Transfer
+#----------------------------------------------------
+#Fix the initial temperature and initialize variables
+fix		heattransfer all heat/gran initial_temperature 298.15 contact_area overlap area_correction yes
+
+#Set a heat flux at the top surface and INITIALISATION of variables
+#region		topLayer plane 0 0.02 -0.087 0 0 1 side in units box
+#variable	tempFluid equal 293
+#variable	meshTemp equal 293
+#variable	grashof atom 0 #((v_partDiameter^3)*9.81*abs(f_Temp-v_tempFluid))/((v_fluidKinViscosity^2)*v_tempFluid)
+#variable	rayleigh atom 0 #(v_prandtl*v_grashof)
+#variable	NuFree atom 0 #(0.56*((v_prandtl*v_rayleigh)/(0.846+v_prandtl))^(1/4))+2
+#variable	NuMixed atom 0 #((v_NuForced^3)+(v_NuFree^3))^(1/3)
+#variable	alpha atom 0 #(v_NuMixed*v_fluidConductivity)/v_partDiameter
+#variable	convectiveFlux atom 0 #v_alpha*v_demiSphereSurface*(v_tempFluid-f_Temp)
+
+#Definition of the model to use
+#------------------------------------------------------------------------------------------------------
+
+# Physics of particle-particle and particle-triangle collisions
+pair_style          gran model hertz tangential history rolling_friction cdt limitForce on
+#si on voulait enregistrer des coefficients supplementaires. Pas besoin avec le style gran 
+pair_coeff          * *  
+
+# Define wall collision model
+#specifier tous nos mesh
+fix 		geometry all wall/gran model hertz tangential history rolling_friction cdt mesh n_meshes 2 meshes zLow zHigh
+
+# Define the type of integrator for the particles
+# (/limit xmax : maximum distance an atom can move in one timestep=permet d'eviter que les particules soient expulsees hors de la simulation s'il y a beaucoup d'overlaps qui generent de grandes forces)
+#fix                 integr all nve/sphere
+
+#******************THE SIMULATION*******************************************
+#***************************************************************************
+
+# Output to the screen to monitor simulation
+# what we output to the screen during computation
+thermo_style        custom step atoms ke cpu f_heattransfer
+thermo_modify	    lost error norm no
+compute_modify      thermo_temp dynamic yes
+#number of iterations after which there is an output
+thermo              ${thermoEvery}
+
+#------------------------------------------------
+#Computes
+#-------------------------------------------------
+compute		   contacts all contact/atom #are overlaping OR in the skin neighborhood
+compute		   every all pair/gran/local id force force_normal force_tangential contactArea delta heatFlux
+compute	   	   everyWall all wall/gran/local id force force_normal force_tangential contactArea delta heatFlux
+compute		   sumHeat all reduce sum c_everyWall[15]
+variable	   sumHeat equal c_sumHeat
+
+# Check if the timestep is valid and remove the particles
+#--------------------------------------------------------------------------------------------
+fix                 timecheck all check/timestep/gran 1 0.2 0.2
+reset_timestep      0
+dump               dmp all custom ${dumpEvery} postHeating/boxHeating_*.dump id type x y z vx vy vz fx fy fz omegax omegay omegaz radius density f_Temp[0] f_heatFlux[0] 
+dump_modify        dmp pad 9 sort id
+run	   	    1
+unfix               timecheck # remove the timecheck fix
+#Remove the particles
+#region		    topHeap block -0.151 0.151 0 0.04 -0.085 0.151 units box 
+#delete_atoms	    region topHeap compress yes #compress will re-assign the particles ID from 1 to the new total
+#dump	            remove all custom 1 postRolling/drumRemove_*.dump id type x y z vx vy vz fx fy fz omegax omegay omegaz radius density v_radialPos f_Temp[0] f_heatFlux[0] f_heatSource[0]
+#dump_modify         remove pad 9 sort id
+#run                1
+#undump		   remove
+
+#Definition of the output files (dump)
+fix		   energieCin all print ${dumpEvery} "${time} ${kineticE}" file ke/keRolling screen no
+fix                nbPart all print ${dumpEvery} "${time} ${nbPart}" file nbPart/partVStimeRolling screen no
+fix		   sumHeatRates all print ${dumpEvery} "${time} ${sumHeat}" file computes/sumHeatRates screen no
+#fix		   temperatures all print ${dumpEvery} "${time} ${tempFluid} ${meshTemp}" file testTemp screen no
+
+dump               wallMesh all mesh/stl 1 postHeating/vtk/side_*.stl zLow zHigh #Pour visualiser la géométrie dans Paraview
+dump_modify        wallMesh pad 9
+#dump		   partHeatFlux all custom ${dumpEvery} postRolling/partHeatFlux_*.dump id v_partVelocity v_partDiameter f_Temp v_reynolds v_NuForcedTurb v_NuForcedLam v_NuForced v_grashof v_rayleigh v_NuFree v_NuMixed v_alpha v_convectiveFlux
+#dump_modify	   partHeatFlux pad 9 sort id 
+
+#Dump des computes
+dump		    contacts all custom ${computeEvery} computes/heating/contacts_*.dump id c_contacts
+dump		    every all local ${computeEvery} computes/heating/every_*.dump c_every[1] c_every[2] c_every[3] c_every[4] c_every[5] c_every[6] c_every[7] c_every[8] c_every[9] c_every[10] c_every[11] c_every[12] c_every[13] c_every[14] c_every[15] 
+dump		    everyWall all local ${computeEvery} computes/heatingWall/everyWall_*.dump c_everyWall[1] c_everyWall[2] c_everyWall[3] c_everyWall[4] c_everyWall[5] c_everyWall[6] c_everyWall[7] c_everyWall[8] c_everyWall[9] c_everyWall[10] c_everyWall[11] c_everyWall[12] c_everyWall[13] c_everyWall[14] c_everyWall[15]
+dump_modify	    contacts pad 9 sort id
+dump_modify	    every pad 9
+dump_modify	    everyWall pad 9
+
+run 		   1 #for the mesh
+undump		   wallMesh
+
+restart            ${restartEvery} restart/boxHeating1 restart/boxHeating2
+
+#run		   ${dumpEvery} upto  #8000
+ 
+#Loop to check if the steady state is reached (sum of all heat fluxes equals 0)
+#label               steadyStateCheck
+#run 		    ${dumpEvery}
+#if                  "${sumHeat} > 2e-12" then "print 'Steady-State not reached'" "jump ${script} steadyStateCheck"
+
+
+run		   ${nbIterTotal}
+
+write_restart       restart/boxHeatingEnd         

@@ -1,0 +1,138 @@
+echo '*******Starting getKeffDEMsim script************'
+echo ''
+echo `date`
+#!/bin/ksh
+#set -ex
+#
+# getKeffDEMsim script : calculate Keff from all cases of the parametric
+#
+# Author : David Vidal & Christine Beaulieu
+# ------   Novembre 2019
+#          Version 1.0 
+#
+# message
+# -------
+  USAGE="Usage: getKeffDEMsim {} {}"
+
+# option 2= only lbm3dbi
+# option 1= only disc3dnit and lbm3dbi
+# option 0= all
+#
+# =======================================
+# verify if the procedure has an argument
+# =======================================
+#
+# changer 0 pour le nombre d'argument
+   if test $# -ne 0
+   then echo "getKeffDEMsim> $USAGE"
+        exit
+   fi
+#
+# ===========================
+# localisation des programmes
+# ===========================
+#
+  name="christine"
+  TEMPLATE="/home/$name/template/"
+  #codesource="/home/$name/LIGGGHTS/LIGGGHTS-PUBLIC/src"
+  root=`pwd`
+  resultsFile="results_keff.dat"
+
+#
+# ========================
+# Prepare parameters files
+# ========================
+#
+#  prepar
+   if test -s parameters.dat
+   then
+     echo""
+   else
+     cp $TEMPLATE/parameters.dat .
+   fi
+   if test -s kpkf.dat
+   then
+     echo""
+   else
+     cp $TEMPLATE/kpkf.dat .
+   fi
+
+#
+# ===============
+# initialisations
+# ===============
+#
+  editor=vi
+
+  nb_kpkf=`wc -l kpkf.dat | awk '{print $1}'`
+
+  nb_sim=`wc -l parameters.dat | awk '{print $1}'`
+
+  max_core=12
+
+#  nb_cpu=`grep " 1" node_available | wc -l`
+
+#echo $new_ratio-$new_angle > bidon2
+#echo $nb_cpu >> bidon2
+#echo `grep " ---> Porosity (%):" $new_ratio-$new_angle.sol |  awk '{print $4}'`
+
+
+#
+#
+# ==============================
+# debut de la boucle d'iteration 
+# ==============================
+#
+#
+  i_kpkf=1
+  i_sim=1
+#  i_dir=1
+
+if test -s  RESULTS
+   then
+     echo "---> Directory RESULTS already created"
+   else
+     mkdir RESULTS #create a directory to contain the result files
+     echo "---> Directory RESULTS created"
+fi
+echo ';Simulation name;Sigma (m);keff/kf;kp;' >> RESULTS/$resultsFile
+
+#  if test $1 -lt 1
+#  then
+
+  while [[ i_sim -le nb_sim ]]; do
+  	new_sim=`head -$i_sim parameters.dat | tail -1 | awk '{print $1}'` 
+        new_sigma=`head -$i_sim parameters.dat | tail -1 | awk '{print $2}'` 
+        #new_c2=`head -$i_sim parameters.dat | tail -1 | awk '{print $3}'` 
+        #new_c3=`head -$i_sim parameters.dat | tail -1 | awk '{print $4}'` 
+        #new_c4=`head -$i_sim parameters.dat | tail -1 | awk '{print $5}'` 
+        #new_Y=`head -$i_sim parameters.dat | tail -1 | awk '{print $6}'`
+        dirname=sim$new_sim-$new_sigma
+
+	cd $dirname
+	echo "*****************I am in the directory " $dirname "*******************"
+        echo ""
+
+         while [[ i_kpkf -le nb_kpkf ]]; do
+              new_kp=`head -$i_kpkf $root/kpkf.dat | tail -1 | awk '{print $2}'`    
+
+              cd kpkf$i_kpkf
+	      echo "I am doing the kp "$i_kpkf "which is equal to "$new_kp 
+	      
+	      cd computes
+	      #cp $TEMPLATE/calculateKeff.py .
+	      echo "Launching Python to calculate keffkf..."
+	      python calculateKeff.py
+              keffkf=`cat keff.txt | awk '{print $1}'`
+              echo '; '$new_sim-$i_kpkf';'$new_sigma';'$keffkf';'$new_kp';' >> ../../../RESULTS/$resultsFile
+	      cd .. #back in the directory kpkf1 
+              #sleep 5
+              cd .. #back in the directory sim1
+              i_kpkf=`expr $i_kpkf + 1`
+	done
+        i_kpkf=1
+	cd ..
+	i_sim=`expr $i_sim + 1`
+   done
+  
+   echo "---> THE END!"

@@ -1,0 +1,174 @@
+echo 'impactRoughness script'
+echo ''
+echo `date`
+#!/bin/ksh
+#set -ex
+#
+# DEMsim script : start parametric study for effective conductivity parameter setting
+#
+# Author : David Vidal & Christine Beaulieu
+# ------   Novembre 2019
+#          Version 1.0 
+#
+# message
+# -------
+  USAGE="Usage: DEMsim {} {}"
+
+# option 2= only lbm3dbi
+# option 1= only disc3dnit and lbm3dbi
+# option 0= all
+#
+# =======================================
+# verify if the procedure has an argument
+# =======================================
+#
+# changer 0 pour le nombre d'argument
+   if test $# -ne 0
+   then echo "DEMsim> $USAGE"
+        exit
+   fi
+#
+# ===========================
+# localisation des programmes
+# ===========================
+#
+  name="christine"
+  TEMPLATE="/home/$name/template"
+  #codesource="/home/$name/LIGGGHTS/LIGGGHTS-PUBLIC/src"
+  root=`pwd`
+
+#
+# ========================
+# Prepare parameters files
+# ========================
+#
+#  prepar
+   if test -s parameters.dat
+   then
+     echo""
+   else
+     cp $TEMPLATE/parameters.dat .
+   fi
+   if test -s kpkf.dat
+   then
+     echo""
+   else
+     cp $TEMPLATE/kpkf.dat .
+   fi
+
+#
+# ===============
+# initialisations
+# ===============
+#
+  editor=vi
+
+  nb_kpkf=`wc -l kpkf.dat | awk '{print $1}'`
+
+  nb_sim=`wc -l parameters.dat | awk '{print $1}'`
+
+  max_core=12
+
+#  nb_cpu=`grep " 1" node_available | wc -l`
+
+#echo $new_ratio-$new_angle > bidon2
+#echo $nb_cpu >> bidon2
+#echo `grep " ---> Porosity (%):" $new_ratio-$new_angle.sol |  awk '{print $4}'`
+
+
+#
+#
+# ==============================
+# debut de la boucle d'iteration 
+# ==============================
+#
+#
+  i_kpkf=1
+  i_sim=1
+#  i_dir=1
+
+#  if test $1 -lt 1
+#  then
+
+  while [[ i_sim -le nb_sim ]]; do
+  	new_sim=`head -$i_sim parameters.dat | tail -1 | awk '{print $1}'` 
+        new_sigma=`head -$i_sim parameters.dat | tail -1 | awk '{print $2}'` 
+        #new_c2=`head -$i_sim parameters.dat | tail -1 | awk '{print $3}'` 
+        #new_c3=`head -$i_sim parameters.dat | tail -1 | awk '{print $4}'` 
+        #new_c4=`head -$i_sim parameters.dat | tail -1 | awk '{print $5}'` 
+        #new_Y=`head -$i_sim parameters.dat | tail -1 | awk '{print $6}'`
+        #dirname=sim$new_sim
+        dirname=sim$new_sim-$new_sigma #-$new_c2-$new_c3-$new_c4-$new_Y 
+
+        if test -s  $dirname
+        then
+           echo "---> Directory " $dirname "already created"
+        else
+           echo "---> Directory "  $dirname "created"
+  	   mkdir $dirname
+        fi
+
+	cd $dirname
+#        cp -r $TEMPLATE/blank/* .
+        #mkdir src
+#        cp -r $codesource/* src
+        #cp $TEMPLATE/fix_heat_gran_conduction.cpp $codesource
+        #sed "s/CCCC1/$new_c1/" $codesource/fix_heat_gran_conduction.cpp > $codesource/bidon
+        #sed "s/CCCC2/$new_c2/" $codesource/bidon > $codesource/fix_heat_gran_conduction.cpp
+        #sed "s/CCCC3/$new_c3/" $codesource/fix_heat_gran_conduction.cpp > $codesource/bidon
+        #sed "s/CCCC4/$new_c4/" $codesource/bidon > $codesource/fix_heat_gran_conduction.cpp
+        #cp $TEMPLATE/fix_wall_gran.cpp $codesource
+        #sed "s/CCCC1/$new_c1/" $codesource/fix_wall_gran.cpp > $codesource/bidon
+        #sed "s/CCCC2/$new_c2/" $codesource/bidon > $codesource/fix_wall_gran.cpp
+        #sed "s/CCCC3/$new_c3/" $codesource/fix_wall_gran.cpp > $codesource/bidon
+        #sed "s/CCCC4/$new_c4/" $codesource/bidon > $codesource/fix_wall_gran.cpp
+        #rm $codesource/bidon
+        loc=`pwd`
+        #cd $codesource
+        #make auto
+        #echo "Location:"$loc
+        #cd $loc
+        #cp $codesource/lmp_auto src/lmp_auto_sim$new_sim
+
+
+         while [[ i_kpkf -le nb_kpkf ]]; do
+              new_kp=`head -$i_kpkf $root/kpkf.dat | tail -1 | awk '{print $2}'`    
+              #mkdir kpkf$i_kpkf
+
+              cd kpkf$i_kpkf
+              #cp -r $TEMPLATE/blank/* .  
+              #sed "s/SSSS/$new_sigma/" in.boxHeating > bidon              	
+              #sed "s/KPPP/$new_kp/" bidon > in.boxHeating
+              #sed "s/BOXX/boxLoadingEnd_$new_Y/" in.boxHeating > bidon
+              #mv bidon in.boxHeating
+	      #echo $i_kpkf
+              #cp ../src/lmp_auto_sim$new_sim lmp_auto_sim$new_sim-$i_kpkf 
+	      #echo "Check name: "lmp_auto_sim$new_sim-$i_kpkf
+
+              ps > bidon
+              nb_core=`grep "l_*" bidon | wc -l`
+              echo "Current launch... (nbCore-sim-kp)"$nb_core"-"$new_sim"-"$i_kpkf
+              while [[ nb_core -ge max_core ]]; do
+                        echo "standby... already using "$nb_core" cores"
+                	sleep 30
+                        ps > bidon
+                        nb_core=`grep "l_*" bidon | wc -l`
+              done
+
+	      #cp $codesource/lmp_auto ./l_$new_sim_$new_kp
+ 	      echo "---> Launching sim"$new_sim"_"$i_kpkf" at "`date`
+              mpirun -np 2 l_$new_sim-$new_kp < in.boxHeating > shHeating &
+	      #$codesource/lmp_auto < in.boxHeating > shHeating &
+              echo ""
+              #echo "---> launching sim"$new_sim_$i_kpkf" at "`date`
+              #echo ""
+              sleep 5
+              cd ..
+              i_kpkf=`expr $i_kpkf + 1`
+	done
+        i_kpkf=1
+	cd ..
+	i_sim=`expr $i_sim + 1`
+   done
+  
+   echo "---> THE END!"

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE Grains3D SYSTEM "../dtd/Grains3D.dtd">
+
+<Grains3D Type="MPI">
+  <Construction>    
+    <Recipient LX="0.30" LY="0.30" LZ="0.12"/>
+    <Origine OX="0." OY="0." OZ="0.00"/>    
+    <DomainDecomposition NX="3" NY="1" NZ="2"/>
+    <MPI Strategie="SRLocalCommOpt" VerbosityLevel="0"/>
+    <MPIperiodes X="0" Y="0" Z="1"/>
+    <Reload Fichier="Grains/Init/insertA" Type="new"/>
+  </Construction>
+
+  <Forces>
+    <Gravite GX="0.0" GY="-9.81" GZ="0."/>
+  </Forces>
+
+  <Simulation>
+    <Temps Debut="0." Fin="150."/>
+    <IncreTemps dt="5e-6"/>
+    <TempsSave Debut="0." Fin="60." Dt="0.25"/>
+    <Fichier>Grains/Simu/simul</Fichier>      
+    <LinkUpdate frequence="20"/>
+
+    <Chargements>
+      <Chargement NomObstacle="drum" Mode="Rotation">
+        <Temps Debut="0." Fin="25."/>
+        <Vecteur X="0.000" Y="0.000" Z="3.1415927e+01"/>
+      </Chargement>
+    </Chargements>
+    
+    <PostProcessingWriters>
+      <Paraview Name="simul" Root="Grains/Simu" InitialCycleNumber="1" Mode="binary"/>
+      <PositionVitesse Name="Grains/Simu/simul"/>   
+    </PostProcessingWriters>   
+  </Simulation>
+</Grains3D>

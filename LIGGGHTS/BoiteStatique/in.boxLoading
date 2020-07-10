@@ -1,0 +1,298 @@
+# in.drumLoading
+variable script string in.boxLoading 
+# ************************************************************************************
+# Titre : Particles falling and packing in a box
+# Author : Christine Beaulieu
+# Date : July, 2020
+#***********************Particles properties******************************************
+#This script considers heat transfer in MONODISPERSE particles 
+#This simulation aims to validate the heat transfer in interstitial gas proposed by Vargas and Komossa
+#
+#**********************Geometry property*********************************************
+#Box
+#Side : 0.10m x 0.10m (x,y)
+#Heigth : 0.20m (z)
+
+#For the insertion :
+#15cm in x
+#************************************************************************************
+#************************************************************************************
+
+# Initialization 
+#--------------------------------------------------------------------------------------
+
+# Preliminaries
+echo                both        # send information to both terminal and software itself
+units               si          # SI units
+atom_style          granular    # Style of atom
+boundary            f f f       # Boundary condition en x y z
+communicate	    single vel yes # must always be present
+atom_modify         map array   # Pour attribuer les ID aux particules
+newton              off         # Prevents supplementary MPI exchange between processors
+
+processors          1 2 1       # Parallel decomposition       
+
+#Creation of the domain
+#----------------------------------------------------------------------------------------
+
+region              domain block -0.001 0.151 -0.001 0.101 -0.001 0.201 units box # Declaration of the domain dimesions are xmin xmax, ymin ymax, etc
+create_box          3 domain #3 types d'atomes : 2 type de particules et les triangles dans le mesh
+
+# Definition of useful variables and particle properties
+#----------------------------------------------------------------------------------------
+#Hard-coded properties and simulation variables
+#TYPE 1
+variable            diameter1 equal 0.00202 #SMALL RADIUS
+variable            rho1 equal 2578
+variable            nbType1 equal 290000
+variable	    massFrac1 equal 1
+
+#TYPE 2
+variable            diameter2 equal 0.006
+variable            rho2 equal 2500
+variable            nbType2 equal 0
+variable            massFrac2 equal 0
+
+#Other variables
+variable            timestepPerso equal 1.8e-5
+variable            dumpEvery equal 5000 #60976 #0.5 sec.
+variable	    thermoEvery equal 100
+variable            insert_everyPerso equal 300
+variable            particleRatePerso equal 50000
+variable            nbIter equal 340000
+variable            timesDumpInRestart equal 1
+variable	    a loop 3
+variable	    Tini equal 294 #21C
+
+#----------------------------------------------
+#Calculated variables
+variable	    radius1 equal ${diameter1}/2
+variable            radius2 equal ${diameter2}/2
+variable	    time equal time
+variable            step equal step
+variable	    kineticE equal ke 
+variable            nbPart equal atoms
+variable            nbTotal equal ${nbType1}+${nbType2}    
+variable            restartEvery equal ${timesDumpInRestart}*${dumpEvery}
+
+# Neighbhors list
+# ---------------------------------------------------------------------------------------
+
+variable 	    skinPerso equal 1.1*${radius1}
+neighbor            ${skinPerso} bin                  # Skin=1.1*(smallRadius) 
+neigh_modify        every 1 check yes delay 0   # Frequency at which we refresh the neighbor list
+
+
+#Creation of the particles
+#----------------------------------------------------------------------------------------
+
+#Material properties (du materiau)
+fix                 m1 all property/global youngsModulus peratomtype 5e6 5e6 5e6
+fix                 m2 all property/global poissonsRatio peratomtype 0.33 0.33 0.33
+
+#Material properties (du contact)
+fix                 m3 all property/global coefficientRestitution peratomtypepair 3 0.8 0.8 0.8 &
+										    0.8 0.8 0.8 &
+										    0.8 0.8 0.8
+fix                 m4 all property/global coefficientFriction  peratomtypepair 3 1.2 1.2 1.2 &
+										  1.2 1.2 1.2 &
+										  1.2 1.2 1.2
+fix		    m5 all property/global coefficientRollingFriction peratomtypepair 3 0.02 0.02 0.02 &
+											0.02 0.02 0.02 &
+											0.02 0.02 0.02
+
+fix		    m6 all property/global youngsModulusOriginal peratomtype 100e9 100e9 100e9
+
+#Thermal properties of the materials
+fix		   conductivity all property/global thermalConductivity peratomtype 221 221 250 #thermal conductivity in W/m.K of glass, glass and aluminum
+fix	           capacity all property/global thermalCapacity peratomtype 896. 896. 900. #heat capacity in J/kg.K
+fix		   gasConductivity all property/global gasConductivity scalar 0.03 
+
+#Time step and gravity
+#-------------------------------------------------------------------------------------------------
+
+# Calculus for timestep
+timestep           ${timestepPerso} #On le determine. Reste constant tout au long de la simulation
+
+# Gravity (ou toute autre force exterieure)
+# nom_de_la_varible   a_qui_elle_s'applique    c'est_quoi   valeur    vecteur   direction
+fix                 gravi all gravity 9.81 vector -1 0 0 
+
+# Insertion of the meshes
+# ------------------------------------------------------------------------------------------------
+
+#Meshes (Aller chercher fichiers mesh dans Salome)
+#fix                box all mesh/surface file mesh/fullBox_mesh.stl type 3 scale 0.001 temperature ${Tini} curvature 1e-5
+
+fix                xLow all mesh/surface file mesh/x0.stl type 3 scale 0.001 temperature ${Tini} curvature 1e-5
+fix                xHigh all mesh/surface file mesh/x15.stl type 3 scale 0.001 temperature ${Tini} curvature 1e-5
+fix                yLow all mesh/surface file mesh/y0.stl type 3 scale 0.001 temperature ${Tini} curvature 1e-5
+fix                yHigh all mesh/surface file mesh/y10.stl type 3 scale 0.001 temperature ${Tini} curvature 1e-5
+fix                floor all mesh/surface file mesh/floor.stl type 3 scale 0.001 temperature ${Tini} curvature 1e-5
+fix                top all mesh/surface file mesh/top.stl type 3 scale 0.001 temperature ${Tini} curvature 1e-5
+
+#fix                xLow all mesh/surface file mesh/xLow.stl type 2 scale 0.001 temperature 298.15 curvature 1e-5
+#fix                xHigh all mesh/surface file mesh/xHigh.stl type 2 scale 0.001 temperature 298.15 curvature 1e-5
+#fix                yLow all mesh/surface file mesh/yLow.stl type 2 scale 0.001 temperature 298.15 curvature 1e-5
+#fix                yHigh all mesh/surface file mesh/yHigh.stl type 2 scale 0.001 temperature 298.15 curvature 1e-5
+#fix                zLow all mesh/surface file mesh/zLow.stl type 2 scale 0.001 temperature 298.15 curvature 1e-5
+#fix                zHigh all mesh/surface file mesh/zHigh.stl type 2 scale 0.001 temperature 298.15 curvature 1e-5
+
+#fix		   zLow all wall/gran model hertz tangential history rolling_friction cdt primitive type 2 zplane 0 temperature 298.15
+#fix		   zHigh all wall/gran model hertz tangential history rolling_friction cdt primitive type 2 zplane 0.032 temperature 298.15
+#fix		   xLow all wall/gran model hertz tangential history rolling_friction cdt primitive type 2 xplane 0 temperature 298.15
+#fix		   xHigh all wall/gran model hertz tangential history rolling_friction cdt primitive type 2 xplane 0.026 temperature 298.15
+#fix		   yLow all wall/gran model hertz tangential history rolling_friction cdt primitive type 2 yplane 0 temperature 298.15
+#fix		   yHigh all wall/gran model hertz tangential history rolling_friction cdt primitive type 2 yplane 0.026 temperature 298.15
+
+#----------------------------------------
+# Insertion of the particles
+#---------------------------------------------------------------------------------------------
+
+#Create two templates of particle  (car les distributions peuvent changer)
+fix                 pts1 all particletemplate/sphere 49979687 atom_type 1 density constant ${rho1} radius constant ${radius1}
+fix                 pts2 all particletemplate/sphere 49979693 atom_type 2 density constant ${rho2} radius constant ${radius2}			 
+fix	  	    pdd1 all particledistribution/discrete/massbased 32452867 2 pts1 ${massFrac1} pts2 ${massFrac2}
+
+#Insert particles within the region, the particle rate is in particle per second
+#!region		    insertZone block 0.005 0.145 0.005 0.095 0.005 0.195 units box
+#fix                 insSmall all insert/rate/region seed 15485863 distributiontemplate pdd1 nparticles INF particlerate ${particleRatePerso} insert_every ${insert_everyPerso} overlapcheck yes all_in yes vel constant -0.01 0 0 region insertZone
+#!fix                 insPart all insert/rate/region seed 15485863 distributiontemplate pdd1 mass INF particlerate ${particleRatePerso} insert_every ${insert_everyPerso} overlapcheck yes all_in yes vel constant -0.2 0 0 region insertZone
+
+
+#Heat Transfer
+#----------------------------------------------------
+#Fix the initial temperature
+fix		heattransfer all heat/gran initial_temperature ${Tini} contact_area overlap area_correction yes
+
+
+#Definition of the model to use
+#------------------------------------------------------------------------------------------------------
+
+# Physics of particle-particle and particle-triangle collisions
+# Style args : plusieurs styles possibles. Voir liste sur internet. Le style gran hertz utilise des equations specifiques pour calculer
+# la force de friction entre 2 particules (Fnormale et tangentielle). Les forces tangentielles sont prises en compte, mais pas la cohesion
+pair_style          gran model hertz tangential history rolling_friction cdt limitForce on
+# Si on voulait enregistrer des coefficients supplementaires. Pas besoin avec le style gran
+pair_coeff          * *
+
+# Define wall collision model
+fix                 geometry all wall/gran model hertz tangential history rolling_friction cdt mesh n_meshes 6 meshes xLow xHigh yLow yHigh floor top
+#fix		     zLow all wall/gran model hertz tangential history rolling_friction cdt primitive type 2 zplane 0 temperature 298.15
+#fix		     zHigh all wall/gran model hertz tangential history rolling_friction cdt primitive type 2 zplane 0.032 temperature 298.15
+
+# Define the type of integrator for the particles
+# ID a_qui_elle_s'applique style_name/sphere 
+# (/limit xmax : maximum distance an atom can move in one timestep=permet d'eviter que les particules soient expulsees hors de
+# la simulation s'il y a beaucoup d'overlaps qui generent de grandes forces)
+fix                 integr all nve/sphere
+#fix                  posVel all nve/limit absolute 0.000005
+
+#******************THE SIMULATION*******************************************
+#***************************************************************************
+
+# Output to the screen to monitor simulation
+# What we output to the screen during computation
+thermo_style        custom step atoms ke cpu f_heattransfer
+thermo_modify	    lost error norm no
+compute_modify      thermo_temp dynamic yes
+# Number of iterations after which there is an output
+thermo              ${thermoEvery} 
+
+#----------------------
+#Computes
+#------------------------
+compute		   everyWall all wall/gran/local id
+
+# Check if the timestep is valid
+fix                timecheck all check/timestep/gran 1 0.2 0.2
+run                1
+unfix              timecheck # remove the timecheck fix
+
+# Definition of fix outputs : ke and nbPart
+fix		   energieCin all print ${dumpEvery} "${time} ${kineticE}" file ke/keLoading screen no
+fix                nbPart all print ${dumpEvery} "${time} ${nbPart}" file nbPart/partVStimeLoading screen no
+
+#Faire sortir les maillages pour pouvoir les visualiser dans Paraview avec la simulation
+dump               wallMesh all mesh/stl 1 postLoading/vtk/side_*.stl xLow xHigh yLow yHigh floor top 
+dump               dmp all custom ${dumpEvery} postLoading/boxLoading_*.dump id type x y z vx vy vz fx fy fz omegax omegay omegaz radius density f_Temp[0] f_heatFlux[0]
+dump_modify        dmp pad 8 sort id
+
+#Dump des computes
+dump		   everyWall all local ${dumpEvery} computes/loading/everyWall_*.dump c_everyWall[1] c_everyWall[2] c_everyWall[3]
+dump_modify	   everyWall pad 8
+
+restart		   ${restartEvery} restart/boxLoading1 restart/boxLoading2
+                                                                                                                                              
+run		    1 
+undump              wallMesh #Pour sortir le maillage juste une fois.
+
+#!run                 ${nbIter} upto  #iterations required to insert all particles of type 1
+
+#dump                test all custom 1 postLoading/drumLoading_*.dump id type x y z vx vy vz fx fy fz omegax omegay omegaz radius density
+#dump_modify         test pad 8
+#run                 500
+#undump              test
+#quit
+
+#Loop to check if all the particles of type 1 are inserted. If not, run another 5000 steps
+#!label               insertCheck
+#!run                 5000
+#!if                  '${nbPart} < ${nbTotal}' then "print 'Insertion not finished'" "jump ${script} insertCheck"
+
+#When we get out of the aboce loop, the number of particles inserted should be enough
+#!unfix		    insPart
+
+#To let time for all particles to reach the bottom
+#!fix                 almostEnd all print 1 "Step ${step}. Insertion 1 is finished." file endInsertion screen no
+#!run                 1
+#!unfix               almostEnd
+#!velocity	    all set -0.01 0 0 #To compact the particles at the bottom
+run                 1000
+
+#To shake the system
+label		    gravityChangeLoop
+unfix 		    gravi
+fix 		    gravi all gravity 9.81 vector -1 -1 0
+run 		    1000
+
+unfix		    gravi
+fix		    gravi all gravity 9.81 vector -1 1 0
+run		    1000
+
+next		    a
+jump		    ${script} gravityChangeLoop
+
+unfix		    gravi
+fix		    gravi all gravity 9.81 vector -1 0 0
+run		    1000
+
+velocity 	    all set 0 0 0   #To relax the system
+
+#To relax the whole system
+label		    loopRelax
+velocity	    all set 0 0 0
+run                 2000
+if		    '${kineticE} > 1e-6' then "print 'system not relaxed'" "jump ${script} loopRelax"
+
+#Remove the particles
+region		    topX block 0.099 0.20 0 0.1 0 0.2 units box 
+delete_atoms	    region topX compress yes #compress will re-assign the particles ID from 1 to the new total
+
+dump		    final all custom 1 postLoading/boxLoadingFinal_*.dump id type x y z vx vy vz fx fy fz omegax omegay omegaz radius density f_Temp[0] f_heatFlux[0]
+dump_modify         final pad 8 sort id
+
+
+
+run                 1
+
+#unfix 		    geometry
+#unfix	   	    xLow
+#unfix	   	    xHigh
+#unfix	   	    yLow
+#unfix	   	    yHigh
+#unfix		    zLow
+#unfix	   	    zHigh	
+
+write_restart 	   restart/boxLoadingEnd
+ 
