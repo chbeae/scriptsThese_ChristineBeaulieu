@@ -1,5 +1,5 @@
 # scriptsThese_ChristineBeaulieu
-## Ces scripts ont été rédigés par Christine Beaulieu lors de sa thèse. Une courte définition de chaque dossier est donnée ci-dessous.
+## Ces scripts ont été rédigés par Christine Beaulieu lors de sa thèse de doctorat à Polytechnique Montréal. Une courte définition de chaque dossier est donnée ci-dessous.
 Tous ces scripts peuvent être téléchargés en dossier .zip ou clônés à l'aide de la commande git clone https://github.com/chbeae/scriptsThese_ChristineBeaulieu
 
 
