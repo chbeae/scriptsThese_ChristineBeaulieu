@@ -15,4 +15,5 @@ Ces scripts ont été rédigés et utilisés pour les simulations du code LIGGGH
 ## Python
 Les scripts présentés dans ce dossier ont été rédigés afin de traiter les fichiers de sortie de LIGGGHTS. Il est nécessaire de transférer ces fichiers de sortie dans les sous-dossiers "dump". Chacun de ces scripts se veut adaptatif aux différentes dimensions de géométrie.
 
+# **************************
 Ces scripts sont disponibles ici dans le but d'offrir des exemples à quiconque qui s'intéresserait à la modélisation du transfert de chaleur dans des matériaux granulaires.  
